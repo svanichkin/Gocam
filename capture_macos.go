@@ -204,12 +204,6 @@ import (
 	"unsafe"
 )
 
-type Frame struct {
-	Data   []byte
-	Width  int
-	Height int
-}
-
 // StartStream запускает захват с камеры и возвращает канал с RGB кадрами.
 // Управление жизненным циклом через ctx: при отмене контекста захват останавливается.
 func StartStream(ctx context.Context) (<-chan Frame, error) {
