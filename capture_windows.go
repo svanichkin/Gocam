@@ -16,6 +16,15 @@ package gocam
 #include <stdlib.h>
 #include <string.h>
 
+static HRESULT GetFrameSizeC(IMFMediaType *type, UINT32 *w, UINT32 *h) {
+    UINT64 v = 0;
+    HRESULT hr = type->lpVtbl->GetUINT64(type, &MF_MT_FRAME_SIZE, &v);
+    if (FAILED(hr)) return hr;
+    *w = (UINT32)(v >> 32);
+    *h = (UINT32)(v & 0xFFFFFFFF);
+    return S_OK;
+}
+
 static IMFSourceReader *gReader = NULL;
 static CRITICAL_SECTION gLock;
 static int gLockInit = 0;
@@ -103,7 +112,7 @@ HRESULT StartCapture() {
 
 	// Попробуем вытащить размер кадра, если есть
 	UINT32 w = 0, h = 0;
-	hr = MFGetAttributeSize(type, &MF_MT_FRAME_SIZE, &w, &h);
+	hr = GetFrameSizeC(type, &w, &h);
 	if (SUCCEEDED(hr) && w > 0 && h > 0) {
 		gW = (LONG)w;
 		gH = (LONG)h;
