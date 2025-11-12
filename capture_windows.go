@@ -5,7 +5,7 @@ package gocam
 
 /*
 #cgo windows CFLAGS: -DUNICODE -D_UNICODE
-#cgo windows LDFLAGS: -lole32 -lmfplat -lmf -lmfreadwrite -luuid
+#cgo windows LDFLAGS: -lole32 -lmfplat -lmf -lmfreadwrite -lmfuuid
 
 #include <windows.h>
 #include <mfapi.h>
@@ -13,6 +13,8 @@ package gocam
 #include <mfreadwrite.h>
 #include <mferror.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static IMFSourceReader *gReader = NULL;
 static CRITICAL_SECTION gLock;
@@ -66,8 +68,7 @@ HRESULT StartCapture() {
 	hr = MFCreateAttributes(&attr, 1);
 	if (FAILED(hr)) goto fail;
 
-	hr = attr->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
-	                   MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
+	hr = attr->lpVtbl->SetGUID(attr, &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, &MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
 	if (FAILED(hr)) goto fail;
 
 	hr = MFEnumDeviceSources(attr, &devices, &count);
@@ -77,12 +78,12 @@ HRESULT StartCapture() {
 	}
 
 	IMFMediaSource *source = NULL;
-	hr = devices[0]->ActivateObject(&IID_IMFMediaSource, (void**)&source);
+	hr = devices[0]->lpVtbl->ActivateObject(devices[0], &IID_IMFMediaSource, (void**)&source);
 	if (FAILED(hr)) goto fail;
 
 	hr = MFCreateSourceReaderFromMediaSource(source, NULL, &gReader);
 	if (FAILED(hr)) {
-		source->Release();
+		source->lpVtbl->Release(source);
 		goto fail;
 	}
 
@@ -91,13 +92,13 @@ HRESULT StartCapture() {
 	hr = MFCreateMediaType(&type);
 	if (FAILED(hr)) goto fail;
 
-	hr = type->SetGUID(&MF_MT_MAJOR_TYPE, &MFMediaType_Video);
+	hr = type->lpVtbl->SetGUID(type, &MF_MT_MAJOR_TYPE, &MFMediaType_Video);
 	if (FAILED(hr)) goto fail;
 
-	hr = type->SetGUID(&MF_MT_SUBTYPE, &MFVideoFormat_RGB24);
+	hr = type->lpVtbl->SetGUID(type, &MF_MT_SUBTYPE, &MFVideoFormat_RGB24);
 	if (FAILED(hr)) goto fail;
 
-	hr = gReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, type);
+	hr = gReader->lpVtbl->SetCurrentMediaType(gReader, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, type);
 	if (FAILED(hr)) goto fail;
 
 	// Попробуем вытащить размер кадра, если есть
@@ -112,12 +113,12 @@ HRESULT StartCapture() {
 		gH = 480;
 	}
 
-	type->Release();
-	source->Release();
-	attr->Release();
+	type->lpVtbl->Release(type);
+	source->lpVtbl->Release(source);
+	attr->lpVtbl->Release(attr);
 
 	for (UINT32 i = 0; i < count; i++) {
-		devices[i]->Release();
+		devices[i]->lpVtbl->Release(devices[i]);
 	}
 	CoTaskMemFree(devices);
 
@@ -125,17 +126,17 @@ HRESULT StartCapture() {
 
 fail:
 	if (gReader) {
-		gReader->Release();
+		gReader->lpVtbl->Release(gReader);
 		gReader = NULL;
 	}
 
 	if (devices) {
 		for (UINT32 i = 0; i < count; i++) {
-			if (devices[i]) devices[i]->Release();
+			if (devices[i]) devices[i]->lpVtbl->Release(devices[i]);
 		}
 		CoTaskMemFree(devices);
 	}
-	if (attr) attr->Release();
+	if (attr) attr->lpVtbl->Release(attr);
 
 	MFShutdown();
 	CoUninitialize();
@@ -153,30 +154,24 @@ int GetFrame(unsigned char **buf, int *w, int *h) {
 	DWORD flags = 0;
 	IMFSample *sample = NULL;
 
-	hr = gReader->ReadSample(
-		MF_SOURCE_READER_FIRST_VIDEO_STREAM,
-		0,
-		NULL,
-		&flags,
-		NULL,
-		&sample);
+	hr = gReader->lpVtbl->ReadSample(gReader, MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0, NULL, &flags, NULL, &sample);
 	if (FAILED(hr) || !sample) {
 		return -1;
 	}
 
 	IMFMediaBuffer *mbuf = NULL;
-	hr = sample->ConvertToContiguousBuffer(&mbuf);
+	hr = sample->lpVtbl->ConvertToContiguousBuffer(sample, &mbuf);
 	if (FAILED(hr) || !mbuf) {
-		if (sample) sample->Release();
+		if (sample) sample->lpVtbl->Release(sample);
 		return -1;
 	}
 
 	BYTE *data = NULL;
 	DWORD len = 0;
-	hr = mbuf->Lock(&data, NULL, &len);
+	hr = mbuf->lpVtbl->Lock(mbuf, &data, NULL, &len);
 	if (FAILED(hr) || !data || len == 0) {
-		mbuf->Release();
-		sample->Release();
+		mbuf->lpVtbl->Release(mbuf);
+		sample->lpVtbl->Release(sample);
 		return -1;
 	}
 
@@ -186,9 +181,9 @@ int GetFrame(unsigned char **buf, int *w, int *h) {
 		if (len % 3 == 0) {
 			frameSize = (int)len;
 		} else {
-			mbuf->Unlock();
-			mbuf->Release();
-			sample->Release();
+			mbuf->lpVtbl->Unlock(mbuf);
+			mbuf->lpVtbl->Release(mbuf);
+			sample->lpVtbl->Release(sample);
 			return -1;
 		}
 	}
@@ -213,9 +208,9 @@ int GetFrame(unsigned char **buf, int *w, int *h) {
 
 	LeaveCriticalSection(&gLock);
 
-	mbuf->Unlock();
-	mbuf->Release();
-	sample->Release();
+	mbuf->lpVtbl->Unlock(mbuf);
+	mbuf->lpVtbl->Release(mbuf);
+	sample->lpVtbl->Release(sample);
 
 	return gReady ? 0 : -1;
 }
@@ -226,7 +221,7 @@ void StopCapture() {
 	}
 
 	if (gReader) {
-		gReader->Release();
+		gReader->lpVtbl->Release(gReader);
 		gReader = NULL;
 	}
 
