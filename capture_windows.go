@@ -107,8 +107,16 @@ HRESULT StartCapture() {
 	hr = type->lpVtbl->SetGUID(type, &MF_MT_SUBTYPE, &MFVideoFormat_RGB24);
 	if (FAILED(hr)) goto fail;
 
-	hr = gReader->lpVtbl->SetCurrentMediaType(gReader, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, type);
+	hr = MFSetAttributeSize(type, &MF_MT_FRAME_SIZE, 352, 288);
 	if (FAILED(hr)) goto fail;
+
+	hr = gReader->lpVtbl->SetCurrentMediaType(gReader, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, type);
+	if (FAILED(hr)) {
+		type->lpVtbl->Release(type);
+		type = NULL;
+		hr = gReader->lpVtbl->GetCurrentMediaType(gReader, MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL, &type);
+		if (FAILED(hr)) goto fail;
+	}
 
 	// Попробуем вытащить размер кадра, если есть
 	UINT32 w = 0, h = 0;
@@ -118,8 +126,8 @@ HRESULT StartCapture() {
 		gH = (LONG)h;
 	} else {
 		// fallback, если нет инфы
-		gW = 640;
-		gH = 480;
+		gW = 352;
+		gH = 288;
 	}
 
 	type->lpVtbl->Release(type);
