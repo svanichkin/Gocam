@@ -120,8 +120,8 @@ int StartCapture() {
         if (!session) return -3;
 
         [session beginConfiguration];
-        if ([session canSetSessionPreset:AVCaptureSessionPreset640x480]) {
-            session.sessionPreset = AVCaptureSessionPreset640x480;
+        if ([session canSetSessionPreset:AVCaptureSessionPreset352x288]) {
+            session.sessionPreset = AVCaptureSessionPreset352x288;
         }
 
         if (![session canAddInput:input]) {
